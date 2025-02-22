@@ -39,20 +39,20 @@ def home():
                 border-radius: 2px;
             }
             .quote {
-                font-size: 3em;
-                margin-bottom: 15px;
+                font-size: 1.5em;
+                margin-bottom: 5px;
                 color: black;
             }
             button {
                 position: fixed; /* Make the button fixed on the screen */
-                bottom: 900px;  /* Position from the bottom */
+                bottom: 300px;  /* Position from the bottom */
                 left: 40%;    /* Position from the left */
                 transform: translateX(-50%); /* Center horizontally */
                 background: white;
-                padding: 10px 20px;
+                padding: 5px 10px;
                 cursor: pointer;
                 font-family: monospace;
-                font-size: 3em;
+                font-size: 2em;
                 border: none;  /* Remove default border */
             }
             button:hover {
@@ -279,3 +279,22 @@ def generate_fractal_art(width=240, height=120):
         # Period bulb
         {'re_min': -1.2, 're_max': -0.8, 'im_min': -0.2, 'im_max': 0.2},
         # Spiral detail
+        {'re_min': -0.748, 're_max': -0.742, 'im_min': 0.1, 'im_max': 0.106},
+        # Tentacle region
+        {'re_min': 0.2, 're_max': 0.4, 'im_min': -0.2, 'im_max': 0.2}
+    ]
+
+    region = random.choice(zoom_regions)
+    re_min, re_max = region['re_min'], region['re_max']
+    im_min, im_max = region['im_min'], region['im_max']
+
+    zoom_factor = 2.0 / (re_max - re_min)
+    max_iter = min(200, int(50 * (1 + math.log(zoom_factor))))
+
+    fractal_data = generate_fractal(width, height, max_iter, re_min, re_max, im_min, im_max)
+    ascii_art = generate_ascii_art(fractal_data, max_iter)
+    return render_art(ascii_art)
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
