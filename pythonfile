@@ -1,0 +1,281 @@
+from flask import Flask, render_template_string, jsonify
+import random
+import math
+import os
+
+app = Flask(__name__)
+
+def load_quotes():
+    quotes_path = os.path.join('attached_assets', 'Pasted-Abandon-normal-instruments-Accept-advice-Accretion-A-line-has-two-sides-Allow-an-easement-an-ea-1740209384405.txt')
+    with open(quotes_path, 'r') as f:
+        return [quote.strip() for quote in f.readlines() if quote.strip()]
+
+QUOTES = load_quotes()
+
+@app.route('/')
+def home():
+    fractal_art = generate_fractal_art()
+    quote = random.choice(QUOTES)
+    template = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Fractal Art Generator</title>
+        <style>
+            body {
+                background: black;
+                font-family: monospace;
+                margin: 0;
+                padding: 0;
+                position: center;
+            }
+            .text-container {
+                position: absolute;
+                transition: all 0.5s ease;
+                z-index: 2;
+                text-align: center;
+                background: white;
+                padding: 15px;
+                border-radius: 2px;
+            }
+            .quote {
+                font-size: 3em;
+                margin-bottom: 15px;
+                color: black;
+            }
+            button {
+                position: fixed; /* Make the button fixed on the screen */
+                bottom: 900px;  /* Position from the bottom */
+                left: 40%;    /* Position from the left */
+                transform: translateX(-50%); /* Center horizontally */
+                background: white;
+                padding: 10px 20px;
+                cursor: pointer;
+                font-family: monospace;
+                font-size: 3em;
+                border: none;  /* Remove default border */
+            }
+            button:hover {
+                background: #ddd;
+            }
+            pre {
+                white-space: pre;
+                color: white;
+                position: relative;
+                z-index: 1;
+                font-size: 0.6vw;
+                line-height: 1;
+                margin: 0;
+                padding: 0;
+                width: 100vw;
+                height: 100vh;
+                overflow: hidden;
+            }
+        </style>
+        <script>
+            function getRandomPosition() {
+                const container = document.querySelector('.text-container');
+                const margin = 50; // Keep away from edges
+                const maxX = window.innerWidth - container.offsetWidth - margin;
+                const maxY = window.innerHeight - container.offsetHeight - margin;
+                const x = Math.random() * (maxX - margin) + margin;
+                const y = Math.random() * (maxY - margin) + margin;
+                return { x, y };
+            }
+            function regenerate() {
+                fetch('/generate')
+                    .then(response => response.json())
+                    .then(data => {
+                        document.getElementById('art').innerHTML = data.art;
+                        document.getElementById('quote').innerHTML = data.quote;
+                        const container = document.querySelector('.text-container');
+                        const { x, y } = getRandomPosition();
+                        container.style.left = x + 'px';
+                        container.style.top = y + 'px';
+                        container.style.transform = 'none';
+                    });
+            }
+            // Set initial random position after page load
+            window.addEventListener('load', () => {
+                const { x, y } = getRandomPosition();
+                const container = document.querySelector('.text-container');
+                container.style.left = x + 'px';
+                container.style.top = y + 'px';
+                container.style.transform = 'none';
+            });
+        </script>
+    </head>
+    <body>
+        <pre id="art">{{ art }}</pre>
+        <div class="text-container">
+            <div class="quote" id="quote">{{ quote }}</div>
+            <button onclick="regenerate()">꩜</button>
+        </div>
+    </body>
+    </html>
+    """
+    return render_template_string(template, art=fractal_art, quote=quote)
+
+@app.route('/generate')
+def generate():
+    return jsonify({
+        'art': generate_fractal_art(),
+        'quote': random.choice(QUOTES)
+    })
+
+# ---------- Fractal Generation Functions ----------
+
+def mandelbrot_iterations(c, max_iter):
+    """Compute the iteration count for a given complex number c."""
+    z = 0
+    for i in range(max_iter):
+        z = z*z + c
+        if abs(z) > 2:
+            return i
+    return max_iter
+
+def map_x(x, width, re_min, re_max):
+    """Map pixel x-coordinate to the real axis of the complex plane."""
+    return re_min + (x / width) * (re_max - re_min)
+
+def map_y(y, height, im_min, im_max):
+    """Map pixel y-coordinate to the imaginary axis of the complex plane."""
+    return im_min + (y / height) * (im_max - im_min)
+
+def generate_fractal(width, height, max_iter, re_min, re_max, im_min, im_max):
+    """
+    Generate a 2D list representing the Mandelbrot fractal.
+    Each element is the number of iterations before divergence.
+    """
+    fractal_data = []
+    for y in range(height):
+        row = []
+        for x in range(width):
+            c = complex(map_x(x, width, re_min, re_max),
+                        map_y(y, height, im_min, im_max))
+            iter_count = mandelbrot_iterations(c, max_iter)
+            row.append(iter_count)
+        fractal_data.append(row)
+    return fractal_data
+
+def ascii_mapper(iter_count, max_iter):
+    """Map an iteration count to an ASCII character with clustering behavior."""
+    # A selection of characters for a gentle gradient
+    chars = " .,:;+*#@"
+    if iter_count == max_iter:
+        return "@"
+
+    normalized = iter_count / max_iter
+    if normalized > 0.8:
+        return random.choice("@#")
+    elif normalized > 0.6:
+        return random.choice("*+#")
+    elif normalized > 0.4:
+        return random.choice(".:;")
+    elif normalized > 0.2:
+        return random.choice(" ..")
+    return " "
+
+def apply_glitch(x, y):
+    """Apply a small random offset to simulate a glitch."""
+    offset_x = x + random.choice([-1, 0, 1])
+    offset_y = y + random.choice([-1, 0, 1])
+    return offset_x, offset_y
+
+def generate_ascii_art(fractal_data, max_iter, glitch_chance=0.05, star_chance=0.1):
+    """Create an ASCII art representation from fractal data with organic structures."""
+    art = {}
+    height = len(fractal_data)
+    width = len(fractal_data[0])
+
+    # Fluid pattern for organic variation
+    fluid_pattern = [[random.random() for _ in range(width)] for _ in range(height)]
+
+    for y in range(height):
+        for x in range(width):
+            orig_x, orig_y = x, y
+            base_value = fractal_data[y][x]
+
+            # Organic variation based on neighbors
+            if 0 < x < width-1 and 0 < y < height-1:
+                neighbors = [
+                    fractal_data[y-1][x],
+                    fractal_data[y+1][x],
+                    fractal_data[y][x-1],
+                    fractal_data[y][x+1]
+                ]
+                variation = sum(abs(base_value - n) for n in neighbors) / 4
+                cluster_factor = math.sin(fluid_pattern[y][x] * math.pi) * 0.5 + 0.5
+                base_value = (base_value + variation * cluster_factor * 2) % max_iter
+
+                # Add micro-clusters
+                if random.random() < 0.2:
+                    base_value = (base_value + max_iter // 2) % max_iter
+
+            char = ascii_mapper(int(base_value), max_iter)
+
+            # Apply glitch effect randomly
+            if random.random() < glitch_chance:
+                x, y = apply_glitch(x, y)
+                if random.random() < 0.3:
+                    char = '~' if random.random() < 0.5 else '≈'
+
+            # Overlay organic star/sparkle symbols
+            if random.random() < star_chance:
+                overlay_chars = '*○•∘'
+                char = random.choice(overlay_chars)
+
+            art[(x, y)] = char
+            x, y = orig_x, orig_y
+    return art
+
+def render_art(art):
+    """Render the art dictionary to a single string with a decorative frame."""
+    if not art:
+        return ""
+    min_x = min(pos[0] for pos in art)
+    max_x = max(pos[0] for pos in art)
+    min_y = min(pos[1] for pos in art)
+    max_y = max(pos[1] for pos in art)
+
+    width = max_x - min_x + 1
+    margin = 10  # Frame margin depth
+    frame_chars = "░▒▓█"  # Gradient for depth effect
+
+    # Top decorative borders
+    deep_borders = []
+    for i in range(margin):
+        char = frame_chars[min(i // 3, len(frame_chars)-1)]
+        border = char * (width + margin * 2)
+        deep_borders.append(border)
+
+    # Build the frame with side borders
+    rows = []
+    rows.extend(deep_borders)
+    for y in range(min_y, max_y + 1):
+        line = ""
+        for i in range(margin):
+            char = frame_chars[min(i // 3, len(frame_chars)-1)]
+            line += char
+        for x in range(min_x, max_x + 1):
+            line += art.get((x, y), " ")
+        for i in range(margin-1, -1, -1):
+            char = frame_chars[min(i // 3, len(frame_chars)-1)]
+            line += char
+        rows.append(line)
+    deep_borders.reverse()
+    rows.extend(deep_borders)
+
+    return "\n".join(rows)
+
+def generate_fractal_art(width=240, height=120):
+    """Generate fractal ASCII art and return it as a string."""
+    max_iter = 50
+    zoom_regions = [
+        # Full view
+        {'re_min': -2.0, 're_max': 1.0, 'im_min': -1.0, 'im_max': 1.0},
+        # Main cardioid
+        {'re_min': -0.7, 're_max': 0.3, 'im_min': -0.5, 'im_max': 0.5},
+        # Period bulb
+        {'re_min': -1.2, 're_max': -0.8, 'im_min': -0.2, 'im_max': 0.2},
+        # Spiral detail
